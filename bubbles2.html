@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Пузырьки</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Segoe UI', 'Poppins', system-ui, -apple-system, 'Roboto', sans-serif;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        .game-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 20%,#14b474, #3a80b2);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Верхняя панель (очки, комбо, таймер) */
+        .top-panel {
+            width: 100%;
+            padding: 12px 20px;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .ui-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .score-box, .timer-box {
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(12px);
+            border-radius: 60px;
+            padding: 8px 22px;
+            color: #f9f3d9;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            border: 1px solid rgba(255,245,190,0.7);
+            box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+            text-align: center;
+        }
+
+        .combo-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .combo-box {
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(12px);
+            border-radius: 60px;
+            padding: 6px 20px;
+            color: #FFD966;
+            font-size: 1.4rem;
+            font-weight: bold;
+            border: 1px solid #FFD966;
+            box-shadow: 0 0 12px rgba(255,220,0,0.5);
+            transition: all 0.1s ease;
+        }
+
+        .combo-box.record-broken {
+            animation: recordFlash 0.5s ease;
+            background: rgba(255,215,0,0.9);
+            color: #2c1a0a;
+            border-color: #ffaa00;
+            box-shadow: 0 0 20px #ffaa00;
+        }
+
+        @keyframes recordFlash {
+            0% { transform: scale(1); background: rgba(0,0,0,0.65); }
+            50% { transform: scale(1.08); background: gold; color: black; border-color: orange; }
+            100% { transform: scale(1); background: rgba(0,0,0,0.65); }
+        }
+
+        .record-box {
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            border-radius: 40px;
+            padding: 3px 12px;
+            font-size: 0.8rem;
+            color: #FFB347;
+            font-weight: bold;
+            border: 1px solid #FFB347;
+        }
+
+        .score-box span, .timer-box span {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-right: 8px;
+            color: #ffe6b3;
+        }
+
+        /* Canvas для шариков — между панелями */
+        .game-canvas-wrapper {
+            flex: 1;
+            width: 100%;
+            position: relative;
+            min-height: 0;
+            z-index: 10;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            touch-action: none;
+            background: radial-gradient(ellipse at center, #2187b0, #0a3b4f);
+        }
+
+        /* Кнопки внизу */
+        .action-buttons {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+            z-index: 20;
+            pointer-events: auto;
+            background: transparent;
+        }
+
+        .restart-btn, .fullscreen-btn {
+            min-width: 150px;
+            justify-content: center;
+            background: linear-gradient(135deg, #ffae42, #ff7e05);
+            border: none;
+            border-radius: 50px;
+            padding: 12px 18px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2c1a0a;
+            box-shadow: 0 5px 0 #a04000;
+            cursor: pointer;
+            font-family: inherit;
+            transition: 0.07s linear;
+            touch-action: manipulation;
+            border: 1px solid rgba(255,255,180,0.8);
+            backdrop-filter: blur(4px);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-align: center;
+        }
+
+        .fullscreen-btn {
+            background: linear-gradient(135deg, #3a86ff, #0050d4);
+            box-shadow: 0 5px 0 #002a6e;
+            color: white;
+        }
+
+        .restart-btn:active, .fullscreen-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 0 #a04000;
+        }
+
+        .fullscreen-btn:active {
+            box-shadow: 0 2px 0 #002a6e;
+        }
+
+        /* Оверлеи */
+        .gameover-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(145deg, #FFE66D, #FFD93D);
+            backdrop-filter: blur(8px);
+            border-radius: 64px;
+            padding: 28px 42px;
+            text-align: center;
+            z-index: 100;
+            border: 4px solid #FF8C00;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.5), 0 0 0 6px rgba(255,200,50,0.4);
+            pointer-events: auto;
+            font-weight: bold;
+            color: #3d2a1a;
+            min-width: 280px;
+            animation: bounceIn 0.35s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        @keyframes bounceIn {
+            0% {
+                transform: translate(-50%, -50%) scale(0.7);
+                opacity: 0;
+            }
+            80% {
+                transform: translate(-50%, -50%) scale(1.05);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .gameover-panel h2 {
+            margin: 0 0 12px 0;
+            font-size: 2.3rem;
+            letter-spacing: 2px;
+            color: #b64900;
+            text-shadow: 2px 2px 0 rgba(255,215,0,0.6);
+        }
+
+        .gameover-panel p {
+            font-size: 1.5rem;
+            margin: 10px 0;
+            background: rgba(0,0,0,0.15);
+            padding: 8px 20px;
+            border-radius: 60px;
+            font-weight: 800;
+        }
+
+        .gameover-panel button {
+            background: #ff8800;
+            border: none;
+            font-size: 1.4rem;
+            padding: 12px 32px;
+            border-radius: 50px;
+            margin-top: 12px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: 0.05s linear;
+            box-shadow: 0 4px 0 #aa5500;
+        }
+
+        .gameover-panel button:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #aa5500;
+        }
+
+        .welcome-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(145deg, #1e3c4a, #0f2c38);
+            backdrop-filter: blur(16px);
+            border-radius: 48px;
+            padding: 28px 35px;
+            text-align: center;
+            z-index: 200;
+            border: 2px solid #FFD966;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.6);
+            pointer-events: auto;
+            font-weight: bold;
+            color: #FFECB3;
+            max-width: 85vw;
+            width: 340px;
+        }
+        .welcome-panel h2 {
+            font-size: 1.9rem;
+            margin-bottom: 15px;
+            color: #FFD966;
+        }
+        .welcome-panel ul {
+            text-align: left;
+            margin: 15px 0;
+            padding-left: 20px;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        .welcome-panel li {
+            margin: 8px 0;
+        }
+        .welcome-panel button {
+            background: #ffae42;
+            border: none;
+            font-size: 1.3rem;
+            padding: 10px 25px;
+            border-radius: 40px;
+            font-weight: bold;
+            color: #2c1a0a;
+            margin-top: 15px;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #a04000;
+        }
+        .welcome-panel button:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 #a04000;
+        }
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .score-box, .timer-box {
+                padding: 5px 16px;
+                font-size: 1.4rem;
+            }
+            .combo-box {
+                font-size: 1.1rem;
+                padding: 4px 14px;
+            }
+            .record-box {
+                font-size: 0.7rem;
+            }
+            .restart-btn, .fullscreen-btn {
+                min-width: 130px;
+                padding: 9px 12px;
+                font-size: 0.95rem;
+            }
+            .gameover-panel h2 {
+                font-size: 1.7rem;
+            }
+            .gameover-panel p {
+                font-size: 1.2rem;
+            }
+            .welcome-panel {
+                width: 85vw;
+                padding: 20px;
+            }
+            .welcome-panel h2 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <!-- Верхняя панель (очки, комбо, рекорд) -->
+    <div class="top-panel">
+        <div class="ui-panel">
+            <div class="score-box"><span>🎯 СЧЁТ</span> <span id="scoreValue">0</span></div>
+            <div class="combo-area">
+                <div class="combo-box" id="comboDisplay">⭐ x1</div>
+                <div class="record-box" id="recordDisplay">🏆 Рекорд комбо: 0</div>
+            </div>
+            <div class="timer-box"><span>⏱️</span> <span id="timerValue">60</span><span>сек</span></div>
+        </div>
+    </div>
+
+    <!-- Холст для шариков (посередине) -->
+    <div class="game-canvas-wrapper">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- Кнопки внизу -->
+    <div class="action-buttons">
+        <button class="fullscreen-btn" id="fullscreenBtn">⛶ Во весь экран</button>
+        <button class="restart-btn" id="restartButton">🔄 Новая игра</button>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // ---------- АУДИО ----------
+        let audioCtx = null;
+        function initAudio() {
+            if (audioCtx) return;
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        function playPopSound() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = 880;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+            osc.start();
+            osc.stop(now + 0.1);
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(audioCtx.destination);
+            osc2.frequency.value = 1200;
+            osc2.type = 'triangle';
+            gain2.gain.setValueAtTime(0.12, now);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+            osc2.start();
+            osc2.stop(now + 0.08);
+        }
+        
+        function playTimeBonusSound() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = 659.25;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.25, now);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+            osc.start();
+            osc.stop(now + 0.2);
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(audioCtx.destination);
+            osc2.frequency.value = 880;
+            osc2.type = 'triangle';
+            gain2.gain.setValueAtTime(0.15, now + 0.05);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+            osc2.start(now + 0.05);
+            osc2.stop(now + 0.25);
+        }
+        
+        function playComboSound(comboLevel) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const baseFreq = 523.25;
+            const freqs = [baseFreq, baseFreq * 1.25, baseFreq * 1.5];
+            freqs.forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = f + (comboLevel % 5) * 5;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.12, now + i*0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+                osc.start(now + i*0.02);
+                osc.stop(now + 0.25);
+            });
+        }
+        
+        function playRecordSound() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            [659.25, 783.99, 987.77, 1318.52].forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = f;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.3, now + i*0.1);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + i*0.1 + 0.3);
+                osc.start(now + i*0.1);
+                osc.stop(now + i*0.1 + 0.3);
+            });
+        }
+        
+        function playGameEndSound() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = f;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0.25, now + i*0.12);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + i*0.12 + 0.35);
+                osc.start(now + i*0.12);
+                osc.stop(now + i*0.12 + 0.35);
+            });
+            const bass = audioCtx.createOscillator();
+            const bassGain = audioCtx.createGain();
+            bass.connect(bassGain);
+            bassGain.connect(audioCtx.destination);
+            bass.frequency.value = 130.81;
+            bass.type = 'triangle';
+            bassGain.gain.setValueAtTime(0.2, now);
+            bassGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+            bass.start(now);
+            bass.stop(now + 0.8);
+        }
+        
+        // ---------- ХОЛСТ ----------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let canvasWidth = 0, canvasHeight = 0;
+        let score = 0;
+        let timeLeft = 60;
+        let gameActive = true;
+        let animationId = null;
+        let gameInterval = null;
+        let balls = [];
+        let particles = [];
+        
+        let comboCounter = 1;
+        let lastTapTime = 0;
+        let maxComboInGame = 1;
+        let allTimeMaxCombo = 0;
+        const COMBO_WINDOW = 2000;
+        
+        let spawnCounter = 0;
+        const BASE_SPAWN_RATE = 28;
+        let MAX_BALLS = 43;
+        
+        let MIN_RADIUS = 28, MAX_RADIUS = 48;
+        const HITBOX_MULTIPLIER = 2;
+        
+        const GREEN_SHADES = ['#6BCB77', '#2A9D8F', '#43AA8B', '#90BE6D', '#4CAF50', '#66BB6A', '#81C784', '#A5D6A7'];
+        const NORMAL_COLORS = [
+            '#FF4D4D', '#FF8C42', '#FFD93D', '#4D96FF', '#9B5DE5', '#F15BB5', '#00BBF9', '#00F5D4', '#FE5F57',
+            '#FEE440', '#9C89B8', '#FF99C8', '#A2D2FF', '#C77DFF', '#FFB347', '#E63946', '#E9C46A'
+        ];
+        
+        let backgroundBubbles = [];
+        let bonusTexts = [];
+        
+        // ---------- РЕКОРДЫ ----------
+        function loadRecord() {
+            const saved = localStorage.getItem('tapBallsMaxCombo');
+            allTimeMaxCombo = (saved && !isNaN(parseInt(saved))) ? parseInt(saved) : 0;
+            document.getElementById('recordDisplay').innerHTML = `🏆 Рекорд комбо: ${allTimeMaxCombo}`;
+        }
+        function saveRecord() {
+            localStorage.setItem('tapBallsMaxCombo', allTimeMaxCombo);
+            document.getElementById('recordDisplay').innerHTML = `🏆 Рекорд комбо: ${allTimeMaxCombo}`;
+        }
+        function flashRecordBreak() {
+            const cb = document.querySelector('.combo-box');
+            cb.classList.add('record-broken');
+            setTimeout(() => cb.classList.remove('record-broken'), 500);
+            playRecordSound();
+        }
+        
+        function updateComboUI() {
+            document.getElementById('comboDisplay').innerHTML = (comboCounter > 1) ? `🔥 x${comboCounter}` : `⭐ x1`;
+        }
+        
+        // ---------- КЛАСС ШАРИКА ----------
+        class Ball {
+            constructor(x, y, radius, color, vx, vy) {
+                this.x = x; this.y = y; this.radius = radius; this.color = color; this.vx = vx; this.vy = vy;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x - this.radius <= 0) { this.x = this.radius; this.vx = -this.vx; }
+                if (this.x + this.radius >= canvasWidth) { this.x = canvasWidth - this.radius; this.vx = -this.vx; }
+                if (this.y - this.radius <= 0) { this.y = this.radius; this.vy = -this.vy; }
+                if (this.y + this.radius >= canvasHeight) { this.y = canvasHeight - this.radius; this.vy = -this.vy; }
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = "rgba(0,0,0,0.4)";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                const grad = ctx.createRadialGradient(
+                    this.x - this.radius*0.3, this.y - this.radius*0.3, this.radius*0.1,
+                    this.x, this.y, this.radius
+                );
+                grad.addColorStop(0, this.lighten(25));
+                grad.addColorStop(0.7, this.color);
+                grad.addColorStop(1, this.darken(25));
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = "rgba(255,255,230,0.95)";
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(this.x - this.radius*0.25, this.y - this.radius*0.25, this.radius*0.22, 0, Math.PI*2);
+                ctx.fillStyle = "rgba(255,255,250,0.75)";
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(this.x - this.radius*0.42, this.y - this.radius*0.38, this.radius*0.09, 0, Math.PI*2);
+                ctx.fillStyle = "rgba(255,255,255,0.95)";
+                ctx.fill();
+                ctx.restore();
+            }
+            lighten(percent) {
+                let r = parseInt(this.color.slice(1,3),16), g = parseInt(this.color.slice(3,5),16), b = parseInt(this.color.slice(5,7),16);
+                return `rgb(${Math.min(255,r+percent)}, ${Math.min(255,g+percent)}, ${Math.min(255,b+percent)})`;
+            }
+            darken(percent) {
+                let r = parseInt(this.color.slice(1,3),16), g = parseInt(this.color.slice(3,5),16), b = parseInt(this.color.slice(5,7),16);
+                return `rgb(${Math.max(0,r-percent)}, ${Math.max(0,g-percent)}, ${Math.max(0,b-percent)})`;
+            }
+        }
+        
+        // ---------- ГЕНЕРАЦИЯ ----------
+        function generateRandomBall() {
+            if (balls.length >= MAX_BALLS) return null;
+            const radius = Math.floor(Math.random() * (MAX_RADIUS - MIN_RADIUS + 1) + MIN_RADIUS);
+            let newX, newY;
+            let safe = 0;
+            do {
+                newX = Math.random() * (canvasWidth - 2*radius) + radius;
+                newY = Math.random() * (canvasHeight - 2*radius) + radius;
+                safe++;
+                if (safe > 100) break;
+            } while (balls.some(b => Math.hypot(b.x - newX, b.y - newY) < b.radius + radius + 10));
+            const isGreen = Math.random() < 0.25;
+            const color = isGreen ? GREEN_SHADES[Math.floor(Math.random()*GREEN_SHADES.length)] : NORMAL_COLORS[Math.floor(Math.random()*NORMAL_COLORS.length)];
+            const vx = (Math.random() - 0.5) * 3.2;
+            const vy = (Math.random() - 0.5) * 3.2;
+            return new Ball(newX, newY, radius, color, vx, vy);
+        }
+        
+        function trySpawnBall() {
+            if (!gameActive) return;
+            const nb = generateRandomBall();
+            if (nb) balls.push(nb);
+        }
+        
+        // ---------- ЭФФЕКТЫ ----------
+        function createPopEffect(x, y, isGreen) {
+            const count = isGreen ? 20 : 16;
+            for(let i=0;i<count;i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5 + 2;
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+                    life: 0.95, size: Math.random()*6+2,
+                    color: isGreen ? `hsl(${Math.random()*40+80},85%,60%)` : `hsl(${Math.random()*360},85%,65%)`
+                });
+            }
+            for(let i=0;i<8;i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random()-0.5)*7, vy: (Math.random()-0.5)*7-1.5,
+                    life: 0.8, size: Math.random()*5+2,
+                    color: isGreen ? `rgb(100,255,100)` : `rgb(255,${180+Math.random()*75},60)`
+                });
+            }
+        }
+        
+        function updateParticles() {
+            for(let i=0;i<particles.length;i++) {
+                particles[i].x += particles[i].vx;
+                particles[i].y += particles[i].vy;
+                particles[i].life -= 0.025;
+                particles[i].vy += 0.2;
+                if(particles[i].life <= 0 || particles[i].y > canvasHeight+100) particles.splice(i--,1);
+            }
+        }
+        function drawParticles() {
+            for(let p of particles) {
+                ctx.globalAlpha = Math.min(p.life,0.9);
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+        
+        function updateBonusTexts() {
+            for(let i=0;i<bonusTexts.length;i++) {
+                bonusTexts[i].y += bonusTexts[i].vy;
+                bonusTexts[i].life -= 0.02;
+                if(bonusTexts[i].life <= 0) bonusTexts.splice(i--,1);
+            }
+        }
+        function drawBonusTexts() {
+            for(let bt of bonusTexts) {
+                ctx.save();
+                ctx.globalAlpha = bt.life;
+                ctx.font = `bold ${Math.floor(26 * bt.life)}px "Segoe UI"`;
+                ctx.fillStyle = '#FFD700';
+                ctx.shadowBlur = 4;
+                ctx.shadowColor = 'black';
+                ctx.fillText(bt.text, bt.x - 30, bt.y - 20);
+                ctx.restore();
+            }
+        }
+        
+        // ---------- ФОНОВЫЕ ПУЗЫРЬКИ ----------
+        function initBackgroundBubbles() {
+            backgroundBubbles = [];
+            for(let i=0;i<70;i++) {
+                backgroundBubbles.push({
+                    x: Math.random()*canvasWidth, y: Math.random()*canvasHeight,
+                    radius: Math.random()*14+4, speedY: Math.random()*0.6+0.2,
+                    color: `hsla(${Math.random()*70+20},85%,70%,${Math.random()*0.5+0.3})`
+                });
+            }
+        }
+        function updateBackgroundBubbles() {
+            for(let b of backgroundBubbles) {
+                b.y -= b.speedY;
+                if(b.y + b.radius < 0) {
+                    b.y = canvasHeight + b.radius;
+                    b.x = Math.random() * canvasWidth;
+                }
+            }
+        }
+        function drawBackgroundBubbles() {
+            for(let b of backgroundBubbles) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+                ctx.fillStyle = b.color;
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(b.x - b.radius*0.2, b.y - b.radius*0.2, b.radius*0.3, 0, Math.PI*2);
+                ctx.fillStyle = "rgba(255,255,220,0.9)";
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+        }
+        
+        // ---------- ОБРАБОТКА ТАПА ----------
+        function handleTap(clientX, clientY) {
+            if (!gameActive) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            let cx = (clientX - rect.left) * scaleX;
+            let cy = (clientY - rect.top) * scaleY;
+            cx = Math.min(Math.max(0, cx), canvasWidth);
+            cy = Math.min(Math.max(0, cy), canvasHeight);
+            
+            for(let i=balls.length-1; i>=0; i--) {
+                const b = balls[i];
+                if (Math.hypot(cx - b.x, cy - b.y) <= b.radius * HITBOX_MULTIPLIER) {
+                    const isGreen = GREEN_SHADES.includes(b.color);
+                    balls.splice(i,1);
+                    
+                    const now = Date.now();
+                    if (lastTapTime && (now - lastTapTime) <= COMBO_WINDOW) comboCounter++;
+                    else comboCounter = 1;
+                    lastTapTime = now;
+                    
+                    if (comboCounter > maxComboInGame) {
+                        maxComboInGame = comboCounter;
+                        if (comboCounter > allTimeMaxCombo) {
+                            allTimeMaxCombo = comboCounter;
+                            saveRecord();
+                            flashRecordBreak();
+                        }
+                    }
+                    
+                    let addScore = 10 + Math.min(comboCounter-1, 15) * 2;
+                    score += addScore;
+                    document.getElementById('scoreValue').innerText = score;
+                    updateComboUI();
+                    
+                    if (isGreen) {
+                        timeLeft += 3;
+                        if (timeLeft > 99) timeLeft = 99;
+                        document.getElementById('timerValue').innerText = Math.floor(timeLeft);
+                        playTimeBonusSound();
+                        bonusTexts.push({ x: cx, y: cy, text: "+3 сек!", life: 1.0, vy: -2 });
+                    } else {
+                        playPopSound();
+                    }
+                    if (comboCounter > 1 && comboCounter % 2 === 0) playComboSound(comboCounter);
+                    createPopEffect(cx, cy, isGreen);
+                    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(30);
+                    return;
+                }
+            }
+            if (lastTapTime) {
+                comboCounter = 1;
+                updateComboUI();
+                lastTapTime = 0;
+            }
+        }
+        
+        // ---------- ТАЙМЕР ----------
+        function startGameTimer() {
+            if (gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(() => {
+                if (!gameActive) return;
+                if (timeLeft <= 0.05) {
+                    gameActive = false;
+                    clearInterval(gameInterval);
+                    gameInterval = null;
+                    showGameOver();
+                    playGameEndSound();
+                } else {
+                    timeLeft -= 0.1;
+                    if (timeLeft < 0) timeLeft = 0;
+                    document.getElementById('timerValue').innerText = Math.floor(timeLeft);
+                }
+            }, 100);
+        }
+        
+        function showGameOver() {
+            let panel = document.getElementById('gameOverPanel');
+            if(!panel) {
+                panel = document.createElement('div');
+                panel.id = 'gameOverPanel';
+                panel.className = 'gameover-panel';
+                document.querySelector('.game-container').appendChild(panel);
+            }
+            panel.innerHTML = `<h2>🎉 ИГРА ЗАВЕРШЕНА 🎉</h2>
+                               <p>🏆 СЧЁТ: ${score}</p>
+                               <p>🔥 МАКС. КОМБО: ${maxComboInGame}</p>
+                               <p>🌟 РЕКОРД ВСЕХ ВРЕМЁН: ${allTimeMaxCombo}</p>
+                               <button id="finalRestartBtn">✨ ИГРАТЬ СНОВА ✨</button>`;
+            panel.classList.remove('hidden');
+            document.getElementById('finalRestartBtn').addEventListener('click', () => {
+                panel.classList.add('hidden');
+                restartGame();
+            });
+        }
+        
+        // ---------- ПОЛНОЭКРАННЫЙ РЕЖИМ ----------
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        function updateFullscreenButton() {
+            const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (isFull) {
+                fullscreenBtn.innerHTML = '✖ Выйти';
+                fullscreenBtn.style.background = "linear-gradient(135deg, #f4c542, #e68a2e)";
+                fullscreenBtn.style.boxShadow = "0 5px 0 #a04000";
+                fullscreenBtn.style.color = "#2c1a0a";
+            } else {
+                fullscreenBtn.innerHTML = '⛶ Во весь экран';
+                fullscreenBtn.style.background = "linear-gradient(135deg, #3a86ff, #0050d4)";
+                fullscreenBtn.style.boxShadow = "0 5px 0 #002a6e";
+                fullscreenBtn.style.color = "white";
+            }
+        }
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                const e = document.documentElement;
+                if(e.requestFullscreen) e.requestFullscreen();
+                else if(e.webkitRequestFullscreen) e.webkitRequestFullscreen();
+            } else {
+                if(document.exitFullscreen) document.exitFullscreen();
+                else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+            updateFullscreenButton();
+        }
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+        
+        // ---------- АДАПТАЦИЯ РАЗМЕРА ХОЛСТА ----------
+        function resizeCanvas() {
+            const wrapper = document.querySelector('.game-canvas-wrapper');
+            canvasWidth = wrapper.clientWidth;
+            canvasHeight = wrapper.clientHeight;
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            const minSide = Math.min(canvasWidth, canvasHeight);
+            MIN_RADIUS = Math.max(22, minSide * 0.05);
+            MAX_RADIUS = Math.max(36, minSide * 0.085);
+            initBackgroundBubbles();
+        }
+        
+        // ---------- ПЕРЕЗАПУСК ----------
+        function restartGame() {
+            if (animationId) cancelAnimationFrame(animationId);
+            if (gameInterval) clearInterval(gameInterval);
+            balls = [];
+            particles = [];
+            bonusTexts = [];
+            score = 0;
+            timeLeft = 60;
+            gameActive = true;
+            spawnCounter = 0;
+            comboCounter = 1;
+            lastTapTime = 0;
+            maxComboInGame = 1;
+            document.getElementById('scoreValue').innerText = "0";
+            document.getElementById('timerValue').innerText = "60";
+            updateComboUI();
+            const panel = document.getElementById('gameOverPanel');
+            if(panel) panel.classList.add('hidden');
+            for(let i=0;i<8;i++) {
+                let b = generateRandomBall();
+                if(b) balls.push(b);
+            }
+            startGameTimer();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function draw() {
+            const grad = ctx.createLinearGradient(0,0,0,canvasHeight);
+            grad.addColorStop(0,'#1b6d8a');
+            grad.addColorStop(1,'#0a4055');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,canvasWidth,canvasHeight);
+            drawBackgroundBubbles();
+            for(let b of balls) b.draw(ctx);
+        }
+        
+        function gameLoop() {
+            if (!gameActive && timeLeft <= 0) {
+                draw();
+                drawParticles();
+                drawBonusTexts();
+                animationId = requestAnimationFrame(gameLoop);
+                return;
+            }
+            if(gameActive) {
+                spawnCounter++;
+                let ds = BASE_SPAWN_RATE;
+                if (timeLeft < 20) ds = Math.max(22, BASE_SPAWN_RATE - 8);
+                if (spawnCounter >= ds) {
+                    spawnCounter = 0;
+                    trySpawnBall();
+                }
+                for(let b of balls) b.update();
+                updateParticles();
+                updateBackgroundBubbles();
+                updateBonusTexts();
+            } else {
+                updateParticles();
+                updateBackgroundBubbles();
+                updateBonusTexts();
+            }
+            draw();
+            drawParticles();
+            drawBonusTexts();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        // ---------- ПРИВЕТСТВИЕ ----------
+        function showWelcome() {
+            let w = document.getElementById('welcomePanel');
+            if(!w) {
+                w = document.createElement('div');
+                w.id = 'welcomePanel';
+                w.className = 'welcome-panel';
+                w.innerHTML = `<h2>🎈 Добро пожаловать!</h2>
+                               <ul><li>👆 Тапай по пузырькам</li><li>🟢 Зелёные дают +3 секунды</li><li>⚡ Клики быстрее 2 сек = комбо</li></ul>
+                               <button id="closeWelcome">Играть!</button>`;
+                document.querySelector('.game-container').appendChild(w);
+                document.getElementById('closeWelcome').addEventListener('click', () => {
+                    w.classList.add('hidden');
+                    if(audioCtx && audioCtx.state !== 'running') audioCtx.resume();
+                });
+            }
+            w.classList.remove('hidden');
+        }
+        
+        // ---------- ИНИЦИАЛИЗАЦИЯ ----------
+        function init() {
+            initAudio();
+            loadRecord();
+            resizeCanvas();
+            window.addEventListener('resize', () => { resizeCanvas(); restartGame(); });
+            document.getElementById('restartButton').addEventListener('click', () => restartGame());
+            document.getElementById('restartButton').addEventListener('touchstart', (e) => { e.preventDefault(); restartGame(); });
+            fullscreenBtn.addEventListener('click', () => toggleFullscreen());
+            fullscreenBtn.addEventListener('touchstart', (e) => { e.preventDefault(); toggleFullscreen(); });
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if(gameActive && e.touches[0]) handleTap(e.touches[0].clientX, e.touches[0].clientY);
+            }, {passive:false});
+            canvas.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                if(gameActive) handleTap(e.clientX, e.clientY);
+            });
+            for(let i=0;i<8;i++) balls.push(generateRandomBall());
+            gameActive = true;
+            updateComboUI();
+            startGameTimer();
+            animationId = requestAnimationFrame(gameLoop);
+            showWelcome();
+        }
+        
+        init();
+    })();
+</script>
+</body>
+</html>
